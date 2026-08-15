@@ -98,3 +98,33 @@ export function validateAmount(input: string, currency: string): string | null {
   }
   return null
 }
+
+/**
+ * Exact decimal subtraction on plain strings, via BigInt.
+ *
+ * Ported verbatim from the same function in `server/index.mjs`, which the
+ * preview backend uses. Money never goes through a float in this project: 0.1 +
+ * 0.2 is the reason. The hosted backend needs it to derive the month-on-month
+ * change, which the SQL function does not return.
+ */
+export function subtractDecimalStrings(a: string, b: string): string {
+  const parse = (v: string): [bigint, number] => {
+    const m = /^(-?)(\d+)(?:\.(\d+))?$/.exec(String(v ?? '0').trim())
+    if (!m) return [0n, 0]
+    const [, sign, int, frac = ''] = m
+    const val = BigInt(int + frac)
+    return [sign === '-' ? -val : val, frac.length]
+  }
+  const [av, as] = parse(a)
+  const [bv, bs] = parse(b)
+  const scale = Math.max(as, bs)
+  const diff = av * 10n ** BigInt(scale - as) - bv * 10n ** BigInt(scale - bs)
+  const neg = diff < 0n
+  const digits = (neg ? -diff : diff).toString().padStart(scale + 1, '0')
+  let out =
+    scale === 0
+      ? digits
+      : `${digits.slice(0, digits.length - scale)}.${digits.slice(digits.length - scale)}`
+  if (out.includes('.')) out = out.replace(/0+$/, '').replace(/\.$/, '')
+  return (neg ? '-' : '') + (out || '0')
+}

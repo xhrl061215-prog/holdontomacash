@@ -24,9 +24,19 @@ import {
   supabaseProfileApi,
 } from './supabaseBackend'
 
-/** Which backend is live. Exported so the UI can state it rather than imply it. */
-export const backendMode: 'hosted' | 'preview' =
-  isSupabaseConfigured ? 'hosted' : 'preview'
+/**
+ * Which backend is live. Exported so the UI can state it rather than imply it.
+ *
+ * 'unconfigured' is distinct from 'preview': the preview API is a real working
+ * backend for local development, whereas a deployed build with no Supabase config
+ * and no preview server reachable has nowhere to store anything, and should say so
+ * instead of failing later at sign-up.
+ */
+export const backendMode: 'hosted' | 'preview' | 'unconfigured' = isSupabaseConfigured
+  ? 'hosted'
+  : import.meta.env.PROD && !import.meta.env.VITE_API_URL
+    ? 'unconfigured'
+    : 'preview'
 
 const API = import.meta.env.VITE_API_URL || '/api-proxy'
 const TOKEN_KEY = 'bt:token'
@@ -370,6 +380,10 @@ export const profileApi = isSupabaseConfigured
       async get() { return request('/api/profile') },
       async update(changes: Record<string, unknown>) {
         return request('/api/profile', { method: 'PATCH', body: JSON.stringify(changes) })
+      },
+      // The preview signup trigger always creates the row; return the existing one.
+      async create() {
+        return request('/api/profile')
       },
     }
 

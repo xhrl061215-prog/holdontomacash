@@ -1,4 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { backendMode } from './lib/supabaseClient'
+import { SetupNotice } from './components/SetupNotice'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { LoginPage } from './pages/LoginPage'
 import { OnboardingPage } from './pages/OnboardingPage'
@@ -40,6 +42,10 @@ function ProtectedRoutes() {
 }
 
 export default function App() {
+  // A deployed-but-unconfigured app should explain itself rather than failing at
+  // sign-up with a message about API keys.
+  if (backendMode === 'unconfigured') return <SetupNotice />
+
   return (
     <AuthProvider>
       <BrowserRouter>

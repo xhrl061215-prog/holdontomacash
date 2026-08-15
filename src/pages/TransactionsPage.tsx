@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { supabase, transactionsApi } from '../lib/supabaseClient'
+import { categoriesApi, paymentMethodsApi, transactionsApi } from '../lib/supabaseClient'
 import type { TransactionFilters } from '../lib/supabaseClient'
 import { formatMoney, formatRate, formatSigned } from '../lib/money'
 import { COMMON_CURRENCIES } from '../lib/seedData'
@@ -78,13 +78,16 @@ export function TransactionsPage() {
   }, [searchInput])
 
   useEffect(() => {
-    Promise.all([
-      supabase.from('categories').select().order(),
-      supabase.from('payment_methods').select().order(),
-    ]).then(([c, p]: any[]) => {
-      if (c.data) setCategories(c.data)
-      if (p.data) setPaymentMethods(p.data)
-    })
+    Promise.all([categoriesApi.list(), paymentMethodsApi.list()])
+      .then(([c, p]) => {
+        setCategories(c.categories ?? [])
+        setPaymentMethods(p.payment_methods ?? [])
+      })
+      .catch(() => {
+        // Filters degrade to "no options" rather than blanking the page.
+        setCategories([])
+        setPaymentMethods([])
+      })
   }, [])
 
   const loadOptions = useCallback(async () => {

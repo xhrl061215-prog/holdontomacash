@@ -15,7 +15,7 @@ export interface AuthUser {
 export interface Session {
   user: AuthUser
 }
-import { supabase } from '../lib/supabaseClient'
+import { supabase, profileApi } from '../lib/supabaseClient'
 import type { Profile } from '../types'
 
 interface AuthContextValue {
@@ -36,16 +36,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
 
-  async function loadProfile(userId: string) {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle()
-
-    if (error) {
+  // No userId parameter: the typed profile API scopes to the signed-in user
+  // itself, so passing one in could only ever disagree with the session.
+  async function loadProfile() {
+    let data: unknown = null
+    try {
+      const res = await profileApi.get()
+      data = res.profile
+    } catch (e: unknown) {
       // eslint-disable-next-line no-console
-      console.warn('[auth] loadProfile error:', error.message)
+      console.warn('[auth] loadProfile error:', e instanceof Error ? e.message : e)
       return
     }
 
@@ -57,15 +57,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // No profile row. The on_auth_user_created trigger normally creates it, so
     // this only happens if that migration has not been applied yet. Self-heal
     // rather than dropping the user onto Add with no local currency.
-    const { data: created, error: insertError } = await supabase
-      .from('profiles')
-      .insert({ id: userId, onboarded: false })
-      .select()
-      .maybeSingle()
-
-    if (insertError) {
+    let created: unknown = null
+    try {
+      const res = await profileApi.create()
+      created = res.profile
+    } catch (e: unknown) {
       // eslint-disable-next-line no-console
-      console.warn('[auth] could not create profile:', insertError.message)
+      console.warn('[auth] could not create profile:', e instanceof Error ? e.message : e)
       return
     }
     setProfile(created as Profile | null)
@@ -78,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!active) return
       setSession(data.session)
       if (data.session?.user) {
-        await loadProfile(data.session.user.id)
+        await loadProfile()
       }
       setLoading(false)
     })
@@ -87,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async (_event, newSession) => {
         setSession(newSession)
         if (newSession?.user) {
-          await loadProfile(newSession.user.id)
+          await loadProfile()
         } else {
           setProfile(null)
         }
@@ -114,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile !== null &&
         (!profile.onboarded || !profile.local_currency),
       refreshProfile: async () => {
-        if (session?.user) await loadProfile(session.user.id)
+        if (session?.user) await loadProfile()
       },
       signOut: async () => {
         await supabase.auth.signOut()

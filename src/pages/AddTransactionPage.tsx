@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabaseClient'
+import { categoriesApi, paymentMethodsApi, transactionsApi } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { todayStr } from '../lib/date'
 import { COMMON_CURRENCIES } from '../lib/seedData'
@@ -39,13 +39,15 @@ export function AddTransactionPage() {
   // Load this user's categories + payment methods (RLS scopes them to them)
   useEffect(() => {
     if (!user) return
-    Promise.all([
-      supabase.from('categories').select('*').order('sort_order'),
-      supabase.from('payment_methods').select('*').order('sort_order'),
-    ]).then(([catRes, pmRes]) => {
-      if (catRes.data) setCategories(catRes.data as Category[])
-      if (pmRes.data) setPaymentMethods(pmRes.data as PaymentMethod[])
-    })
+    Promise.all([categoriesApi.list(), paymentMethodsApi.list()])
+      .then(([catRes, pmRes]) => {
+        setCategories((catRes.categories ?? []) as Category[])
+        setPaymentMethods((pmRes.payment_methods ?? []) as PaymentMethod[])
+      })
+      .catch((e: unknown) => {
+        // Surface it: a silent catch here is what made this page look blank.
+        setError(e instanceof Error ? e.message : 'Could not load categories.')
+      })
   }, [user])
 
   const filteredCategories = categories.filter((c) => c.type === type)
@@ -99,7 +101,9 @@ export function AddTransactionPage() {
     setSaving(true)
     setError(null)
 
-    const { error: insertError } = await supabase.from('transactions').insert({
+    let insertError: { message: string } | null = null
+    try {
+      await transactionsApi.create({
       user_id: user.id,
       transaction_type: type,
       amount: amount.trim(),
@@ -109,7 +113,10 @@ export function AddTransactionPage() {
       title: title.trim(),
       description: description.trim() || null,
       payment_method_id: paymentMethodId || null,
-    })
+      })
+    } catch (e: unknown) {
+      insertError = { message: e instanceof Error ? e.message : 'Could not save.' }
+    }
 
     setSaving(false)
     if (insertError) {

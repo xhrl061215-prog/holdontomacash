@@ -21,12 +21,88 @@
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { Overview, OverviewCategory, TransactionFilters } from './supabaseClient'
+import { adaptOverview } from './overviewShape'
 
-const URL = import.meta.env.VITE_SUPABASE_URL as string | undefined
-const ANON = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+/**
+ * Config resolution, in priority order:
+ *
+ *   1. `public/config.js`, read at RUNTIME (window.BUDGET_TRACKER_CONFIG)
+ *   2. Vite env vars, baked in at BUILD time
+ *
+ * The runtime file exists because build-time-only config has a trap: keys added
+ * after a deploy are absent from the already-built bundle, so the app fails with
+ * "Invalid API key" on a setup that is otherwise correct, and the fix — rebuild —
+ * is not discoverable from the error. Editing one small file and reloading needs
+ * no build step and no rebuild to take effect.
+ *
+ * Both paths carry only the anon key, which is designed to be public: RLS denies
+ * every row until a policy matches the signed-in caller.
+ */
+interface RuntimeConfig {
+  SUPABASE_URL?: string
+  SUPABASE_ANON_KEY?: string
+}
+
+const runtime: RuntimeConfig =
+  (typeof window !== 'undefined'
+    ? (window as unknown as { BUDGET_TRACKER_CONFIG?: RuntimeConfig }).BUDGET_TRACKER_CONFIG
+    : undefined) ?? {}
+
+/** Placeholder values in the shipped config.js must not count as configured. */
+const isPlaceholder = (v?: string) =>
+  !v || v.startsWith('PASTE_') || v.includes('your-project') || v.includes('YOUR_')
+
+/**
+ * Pick the runtime value only if it is real, else fall back to the build value.
+ *
+ * A plain `runtime.X || build.X` is wrong: the shipped config.js placeholder is
+ * a non-empty string, so it is truthy and shadows a perfectly good build-time
+ * env var — the app then claims it is "not connected to a database" while the
+ * correct keys sit in the bundle. Emptiness is not the test; being a placeholder
+ * is.
+ */
+const pick = (runtimeValue?: string, buildValue?: string) =>
+  isPlaceholder(runtimeValue) ? buildValue : runtimeValue
+
+const rawUrl = pick(runtime.SUPABASE_URL, import.meta.env.VITE_SUPABASE_URL as string | undefined)
+const rawAnon = pick(
+  runtime.SUPABASE_ANON_KEY,
+  import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined,
+)
+
+/**
+ * Reduce whatever was pasted to the bare project origin.
+ *
+ * The Supabase dashboard shows the REST endpoint
+ * (`https://<ref>.supabase.co/rest/v1`) next to the anon key, so that is what
+ * gets copied — and supabase-js then appends its own paths to it, producing
+ * `/rest/v1/auth/v1/signup`. PostgREST answers that with
+ * "Invalid path specified in request URL", which names neither the setting nor
+ * the fix. Normalising here means either value works.
+ *
+ * Exported for the regression test.
+ */
+export function normaliseSupabaseUrl(raw: string): string {
+  let v = raw.trim().replace(/\/+$/, '')
+  // Strip a copied API path segment: /rest/v1, /auth/v1, /storage/v1, ...
+  v = v.replace(/\/(rest|auth|storage|realtime|functions|graphql)\/v\d+$/i, '')
+  return v.replace(/\/+$/, '')
+}
+
+// Trim: a trailing space or newline pasted from a dashboard is a common and
+// otherwise baffling failure.
+const URL = isPlaceholder(rawUrl) ? undefined : normaliseSupabaseUrl(rawUrl!)
+const ANON = isPlaceholder(rawAnon) ? undefined : rawAnon!.trim()
 
 /** True when hosted Supabase is configured. Read by supabaseClient.ts. */
 export const isSupabaseConfigured = Boolean(URL && ANON)
+
+/** Where the config came from, so the UI can say rather than imply. */
+export const configSource: 'runtime' | 'build' | 'none' = !isSupabaseConfigured
+  ? 'none'
+  : !isPlaceholder(runtime.SUPABASE_URL)
+    ? 'runtime'
+    : 'build'
 
 let client: SupabaseClient | null = null
 export function getClient(): SupabaseClient {
@@ -131,6 +207,19 @@ export const supabaseProfileApi = {
     const user = await requireUser()
     const { data, error } = await getClient()
       .from('profiles').update(changes).eq('id', user.id).select().single()
+    if (error) throw new Error(error.message)
+    return { profile: data }
+  },
+
+  /**
+   * Create this user's profile row if the signup trigger did not.
+   * Separate from update(): an UPDATE matching no row is not an insert, so
+   * reusing update() here would "succeed" while leaving the user profile-less.
+   */
+  async create() {
+    const user = await requireUser()
+    const { data, error } = await getClient()
+      .from('profiles').insert({ id: user.id, onboarded: false }).select().single()
     if (error) throw new Error(error.message)
     return { profile: data }
   },
@@ -252,12 +341,11 @@ export const supabaseTransactionsApi = {
 
 export const supabaseOverviewApi = {
   async get(month?: string): Promise<Overview> {
+    const m = month ?? new Date().toISOString().slice(0, 7)
     // Aggregation stays in SQL so it covers every row, not the 500-row page.
-    const { data, error } = await getClient().rpc('overview_for_month', {
-      p_month: month ?? new Date().toISOString().slice(0, 7),
-    })
+    const { data, error } = await getClient().rpc('overview_for_month', { p_month: m })
     if (error) throw new Error(error.message)
-    return data as Overview
+    return adaptOverview(data, m, null)
   },
 }
 

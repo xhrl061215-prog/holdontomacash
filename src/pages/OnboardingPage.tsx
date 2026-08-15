@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { supabase } from '../lib/supabaseClient'
+import { profileApi } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { COMMON_COUNTRIES, COMMON_CURRENCIES } from '../lib/seedData'
 import { validateAmount } from '../lib/money'
@@ -36,9 +36,9 @@ export function OnboardingPage() {
     setBusy(true)
     setError(null)
 
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({
+    let updateError: { message: string } | null = null
+    try {
+      await profileApi.update({
         study_country: studyCountry,
         local_currency: localCurrency,
         home_currency: homeCurrency,
@@ -49,7 +49,9 @@ export function OnboardingPage() {
         budget_currency: budget === null ? null : localCurrency,
         onboarded: true,
       })
-      .eq('id', user.id)
+    } catch (e: unknown) {
+      updateError = { message: e instanceof Error ? e.message : 'Could not save your setup.' }
+    }
 
     setBusy(false)
     if (updateError) {

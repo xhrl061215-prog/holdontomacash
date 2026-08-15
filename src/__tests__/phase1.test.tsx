@@ -24,32 +24,36 @@ const paymentMethods = [
 ]
 
 vi.mock('../lib/supabaseClient', () => {
-  const from = (table: string) => {
-    const builder: any = {
-      select: () => builder,
-      eq: () => builder,
-      order: () => {
-        if (table === 'categories') return Promise.resolve({ data: categories, error: null })
-        if (table === 'payment_methods') return Promise.resolve({ data: paymentMethods, error: null })
-        return Promise.resolve({ data: [], error: null })
-      },
-      maybeSingle: () => Promise.resolve({ data: state.profile, error: null }),
-      insert: (rows: any) => {
-        state.inserted.push(rows)
-        const res: any = Promise.resolve({ data: rows, error: null })
-        res.select = () => ({ maybeSingle: () => Promise.resolve({ data: rows, error: null }) })
-        return res
-      },
-      update: (vals: any) => {
-        state.updated.push(vals)
-        return { eq: () => Promise.resolve({ data: vals, error: null }) }
-      },
-    }
-    return builder
-  }
+  // Mocks the TYPED APIs, which is the only surface both backends share.
+  // A previous version of this mock provided a working `.from()` shim, and that
+  // is exactly why the blank-page bug was invisible here: the hosted backend's
+  // `.from()` throws, so mocking a working one tested a shape production never
+  // had. Mock what both backends implement, not what one of them happens to.
   return {
+    categoriesApi: { list: () => Promise.resolve({ categories }) },
+    paymentMethodsApi: { list: () => Promise.resolve({ payment_methods: paymentMethods }) },
+    profileApi: {
+      get: () => Promise.resolve({ profile: state.profile }),
+      create: () => Promise.resolve({ profile: state.profile }),
+      update: (changes: any) => {
+        state.updated.push(changes)
+        return Promise.resolve({ profile: { ...state.profile, ...changes } })
+      },
+    },
+    transactionsApi: {
+      create: (row: any) => {
+        state.inserted.push(row)
+        return Promise.resolve({ transaction: row })
+      },
+      list: () => Promise.resolve({ transactions: [], total: 0 }),
+      usedMonths: () => Promise.resolve({ months: [] }),
+      usedCurrencies: () => Promise.resolve({ currencies: [] }),
+    },
+    overviewApi: { get: () => Promise.resolve({}) },
     supabase: {
-      from,
+      from: () => {
+        throw new Error('use the typed apis')
+      },
       auth: {
         getSession: () => Promise.resolve({ data: { session: state.session } }),
         onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
@@ -58,6 +62,9 @@ vi.mock('../lib/supabaseClient', () => {
         signOut: vi.fn(() => Promise.resolve()),
       },
     },
+    // These tests exercise the preview backend, so the app must not render the
+    // "not configured yet" notice instead of the real routes.
+    backendMode: 'preview' as const,
   }
 })
 
