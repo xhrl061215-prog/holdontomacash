@@ -1,0 +1,15 @@
+{
+  "name": "BudgetTracker — International Student Budget",
+  "short_name": "BudgetTracker",
+  "description": "Multi-currency budget tracking for international students",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#2d5bff",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,137 @@
+@import 'tailwindcss';
+
+/*
+  International Student Budget Tracker — design tokens.
+  Source: Designer spec (part 3/3). "Excel × Notion × light fintech dashboard":
+  calm, functional, whitespace-first. No gradients, glassmorphism, or bubbly radius.
+
+  Token names are Tailwind v4-idiomatic (clean utility classes) but the hex
+  VALUES match the Designer spec exactly:
+    surface / surface-2 / surface-3  ← bg.primary / bg.secondary / bg.tertiary
+    line / line-strong               ← border.DEFAULT / border.strong
+    ink / ink-2 / ink-3 / ink-inv    ← text.primary / secondary / tertiary / inverse
+    accent / accent-hover / accent-soft
+    expense / expense-soft,  income / income-soft
+    chart-1..6 / chart-other
+*/
+
+@theme {
+  /* Surfaces */
+  --color-surface: #ffffff;
+  --color-surface-2: #f7f7f5;
+  --color-surface-3: #efefec;
+
+  /* Borders */
+  --color-line: #e2e2de;
+  --color-line-strong: #c8c8c4;
+
+  /* Text */
+  --color-ink: #1a1a1a;
+  --color-ink-2: #6b6b68;
+  --color-ink-3: #9b9b98;
+  --color-ink-inv: #ffffff;
+
+  /* Accent */
+  --color-accent: #2d5bff;
+  --color-accent-hover: #1f47cc;
+  --color-accent-soft: #e8eeff;
+
+  /* Semantic */
+  --color-expense: #c0392b;
+  --color-expense-soft: #fbeae8;
+  --color-income: #1e8e3e;
+  --color-income-soft: #e6f4ea;
+
+  /* Chart palette */
+  --color-chart-1: #2d5bff;
+  --color-chart-2: #1e8e3e;
+  --color-chart-3: #e8a33d;
+  --color-chart-4: #8e5bcc;
+  --color-chart-5: #c0392b;
+  --color-chart-6: #4a9d9c;
+  --color-chart-other: #9b9b98;
+
+  /* Type */
+  --font-sans: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'SF Mono', ui-monospace, Consolas, monospace;
+
+  /* Designer size scale */
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 28px;
+  --text-3xl: 40px;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-full: 9999px;
+
+  /* Shadow */
+  --shadow-dropdown: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+:root {
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background: var(--color-surface);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--color-surface);
+}
+
+/* Dense table baseline — Transactions page.
+   Designer: border-collapse, th uppercase secondary sticky 36px,
+   td 44px border-bottom, zebra even rows surface-2, hover accent-soft,
+   amount columns font-mono right-align. */
+.table-dense {
+  font-variant-numeric: tabular-nums;
+  border-collapse: collapse;
+}
+
+.table-dense th,
+.table-dense td {
+  padding: 0.5rem 0.625rem;
+  border-bottom: 1px solid var(--color-line);
+  white-space: nowrap;
+}
+
+.table-dense th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--color-ink-2);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  position: sticky;
+  top: 0;
+  background: var(--color-surface-2);
+  height: 36px;
+}
+
+.table-dense td {
+  height: 44px;
+  font-size: var(--text-sm);
+  color: var(--color-ink);
+}
+
+.table-dense tbody tr:nth-child(even) {
+  background: var(--color-surface-2);
+}
+
+.table-dense tbody tr:hover {
+  background: var(--color-accent-soft);
+}
+
+.table-dense .col-amount {
+  font-family: var(--font-mono);
+  text-align: right;
+}
